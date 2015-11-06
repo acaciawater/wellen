@@ -67,7 +67,7 @@ $(function(){initialize();});
 <tbody>
 {% for loc in object.projectlocatie_set.all %}
 <tr>
-<td><a href="{% url 'wellen-dashboard' loc.name %}">{{loc.name}}</a></td>
+<td><a href="{% url 'wellen-dashboard' loc.dashboard|default:loc.name %}">{{loc.name}}</a></td>
 <td>{%if loc.webcam%}<a href="{{loc.webcam.image}}"><img src="{{loc.webcam.image}}"/></a>{% endif %}{{loc.description|safe}}</td>
 </tr>
 {% empty %}
