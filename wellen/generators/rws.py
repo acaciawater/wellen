@@ -7,8 +7,24 @@ Created on Nov 13, 2015
 import logging, re, zipfile, csv, datetime, dateutil, StringIO
 from acacia.data.generators.generator import Generator
 import pandas as pd
+import numpy as np
+import pytz
 
 logger = logging.getLogger(__name__)
+
+def convtime(txt,tz=None):
+    try:
+        dt = datetime.datetime.strptime(txt,'%d-%m-%Y')
+        if tz is not None:
+            dt = dt.replace(tzinfo=tz)
+        return dt
+    except:
+        return None
+
+def date_parser(dt):
+    ''' date parser for pandas read_csv '''
+    tz = pytz.timezone('CET')
+    return np.array([convtime(t,tz) for t in dt])
 
 class RWSHistory(Generator):
     
@@ -38,9 +54,9 @@ class RWSHistory(Generator):
     def get_data(self, f, **kwargs):
         header = self.get_header(f)
         columns = header.get('COLUMNS',[])
-        skiprows = self.skiprows if self.engine == 'python' else 0
+        #skiprows = self.skiprows if self.engine == 'python' else 0
         buf = StringIO.StringIO(f.read())
-        data = self.read_csv(buf, header=None, names=columns, skiprows = skiprows, sep = r'\s+', skipinitialspace=True, comment = '#', index_col = 0, parse_dates = True)
+        data = self.read_csv(buf, header=None, names=columns, sep = r'\s+', skipinitialspace=True, comment = '#', index_col = 0, parse_dates = True, date_parser = date_parser, na_values=-999)
         return data
 
     def get_columns(self, hdr):
@@ -65,6 +81,10 @@ class LMW10(Generator):
         self.parameter = kwargs.get('parameter','H10') 
         self.locatie = kwargs.get('locatie', 'AMRO')
         self.index = -1 # row number in file
+        
+    def download(self, **kwargs):
+        kwargs['filename'] = 'meetdata.zip'
+        return super(LMW10, self).download(**kwargs)
         
     def get_header(self, fil):
         header = {}
@@ -113,6 +133,8 @@ class LMW10(Generator):
                 for d in row:
                     try:
                         d = float(d)
+                        if d < -990:
+                            d = None
                     except:
                         d = None
                     data.append(d)
