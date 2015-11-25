@@ -12,9 +12,18 @@ import pytz
 
 logger = logging.getLogger(__name__)
 
-def convtime(txt,tz=None):
+def convdate(txt,tz=None):
     try:
         dt = datetime.datetime.strptime(txt,'%d-%m-%Y')
+        if tz is not None:
+            dt = dt.replace(tzinfo=tz)
+        return dt
+    except:
+        return None
+
+def convtime(txt,tz=None):
+    try:
+        dt = datetime.datetime.strptime(txt,'%d-%m-%Y %H:%M')
         if tz is not None:
             dt = dt.replace(tzinfo=tz)
         return dt
@@ -24,7 +33,12 @@ def convtime(txt,tz=None):
 def date_parser(dt):
     ''' date parser for pandas read_csv '''
     tz = pytz.timezone('CET')
-    return np.array([convtime(t,tz) for t in dt])
+    return np.array([convdate(t,tz) for t in dt])
+
+def time_parser(t):
+    ''' datetime parser for pandas read_csv '''
+    tz = pytz.timezone('CET')
+    return convtime(t,tz)
 
 class RWSHistory(Generator):
     
@@ -32,13 +46,17 @@ class RWSHistory(Generator):
         header = {}
         descr = {}
         header['DESCRIPTION'] = descr
-        header['COLUMNS'] = []
+        header['COLUMNS'] = ['Datum']
         f.seek(0)
         line = f.readline()
         self.skiprows = 0
+        self.hastime = False
         while line != '':
-            if re.match('^\d{2}\-\d{2}\-\d{4}\s+\d+',line):
-                # data start 
+            if re.match('^\d{2}\-\d{2}\-\d{4}\s+\d{2}\:\d{2}',line):
+                self.hastime = True
+                header['COLUMNS'].insert(1,'Tijd')
+                break
+            elif re.match('^\d{2}\-\d{2}\-\d{4}',line):
                 break
             colon = line.find(':')
             if colon>0:
@@ -54,13 +72,18 @@ class RWSHistory(Generator):
     def get_data(self, f, **kwargs):
         header = self.get_header(f)
         columns = header.get('COLUMNS',[])
-        #skiprows = self.skiprows if self.engine == 'python' else 0
+        f.seek(0)
+        skiprows = self.skiprows
         buf = StringIO.StringIO(f.read())
-        data = self.read_csv(buf, header=None, names=columns, sep = r'\s+', skipinitialspace=True, comment = '#', index_col = 0, parse_dates = True, date_parser = date_parser, na_values=-999)
+        if self.hastime:
+            data = self.read_csv(buf, header=None, names=columns, sep = r'\s+', skiprows = skiprows, index_col = 'DatumTijd', parse_dates = {'DatumTijd': [0,1]}, date_parser = time_parser, na_values=-999)
+        else:
+            data = self.read_csv(buf, header=None, names=columns, sep = r'\s+', skiprows = skiprows, index_col = 'Datum', parse_dates = True, date_parser = date_parser, na_values=-999)
         return data
 
     def get_columns(self, hdr):
-        return hdr.get('COLUMNS',[])
+        cols = hdr.get('COLUMNS',[])
+        return [cols[-1]]
     
     def get_parameters(self, fil):
         header = self.get_header(fil)
@@ -156,13 +179,13 @@ class LMW10(Generator):
     
 if __name__ == '__main__':
     
-#     gen = RWSHistory()
-#     with open(r'/media/sf_F_DRIVE/acaciadata.com/nederrijnlekenwaal/ambo.txt') as f:
-#         print gen.get_parameters(f)
-#         print gen.get_data(f)
+    gen = RWSHistory()
+    with open(r'/media/sf_F_DRIVE/acaciadata.com/nederrijnlekenwaal/habe.txt') as f:
+        print gen.get_parameters(f)
+        print gen.get_data(f)
         
-    gen = LMW10()
-    datafile = r'/media/sf_F_DRIVE/acaciadata.com/meetdata.zip'
-    print gen.get_parameters(datafile)
-    print gen.get_data(datafile)
+#    gen = LMW10()
+#    datafile = r'/media/sf_F_DRIVE/acaciadata.com/meetdata.zip'
+#   print gen.get_parameters(datafile)
+#    print gen.get_data(datafile)
             
