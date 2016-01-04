@@ -38,9 +38,9 @@ INSTALLED_APPS = (
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.gis',
-    'django_extensions', # for ERD
+#    'django_extensions', # for ERD
     'bootstrap3',
-    'south',
+#    'south',
     'registration',
     'acacia',
     'acacia.data',
