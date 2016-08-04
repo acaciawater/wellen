@@ -6,9 +6,12 @@ Created on Nov 13, 2015
 
 import logging, re, zipfile, csv, datetime, dateutil, StringIO
 from acacia.data.generators.generator import Generator
+
 import pandas as pd
 import numpy as np
 import pytz
+import json
+import csv
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +42,51 @@ def time_parser(t):
     ''' datetime parser for pandas read_csv '''
     tz = pytz.timezone('CET')
     return convtime(t,tz)
+#WB_URL = r'http://live.waterbase.nl/wswaterbase/cgi-bin/wbGETDATA?site=MIV&lang=nl&ggt=id2392&loc=GENMDN&from=201001010000&to=201012312359&fmt=html'
+#WB_URL = r'http://live.waterbase.nl/wswaterbase/cgi-bin/wbGETDATA?site=MIV&lang=nl&ggt=id1&loc=CULBBG&from=201301010000&to=201512312359'
+WB_URL = r'http://live.waterbase.nl/wswaterbase/cgi-bin/wbGETDATA?site=MIV&lang=nl&ggt=id{id}&loc={loc}&from={start}&to={stop}'
+
+class Waterbase(Generator): # waterstanden van waterbase
+    def __init__(self, *args, **kwargs):
+        super(Waterbase,self).__init__(*args,**kwargs)
+
+    def download(self,**kwargs):
+        loc = kwargs.get('locatie', 'CULBBG')
+        id = kwargs.get('id', 1) # id1 = waterhoogte, id2392 = 
+        start = kwargs.get('start', '201601010000')
+        stop = kwargs.get('stop', '201612312359')
+        url = kwargs.get('url', WB_URL)
+        url = url.format(loc=loc,id=id,start=start,stop=stop)
+        kwargs['url'] = url
+        return super(Waterbase, self).download(**kwargs)
+
+    def _get_parameter(self,row):
+        wns = row['waarnemingssoort']
+        name = wns.split()[0]
+        return {'name':name, 'description': wns, 'unit': row['eenheid']}
+            
+    def get_parameters(self, f):
+        f.seek(0)
+        data = self.read_csv(f, parse_dates = {'Datumtijd': ['datum', 'tijd']}, index_col = 'Datumtijd', skiprows = 3, sep =';', 
+                             usecols = ['datum', 'tijd', 'waarde', 'waarnemingssoort', 'eenheid'], nrows = 1)
+        row = data.iloc[0]
+        p = self._get_parameter(row)
+        return {p['name']: {'description': p['description'], 'unit': p['unit']}}
+
+    def get_data(self, f, **kwargs):
+        f.seek(0)
+        data = self.read_csv(f, parse_dates = {'Datumtijd': ['datum', 'tijd']}, index_col = 'Datumtijd', skiprows = 3, sep =';', 
+                             usecols = ['datum', 'tijd', 'waarde', 'waarnemingssoort', 'eenheid'])
+        if not isinstance(data.index,pd.DatetimeIndex):
+            # for some reason dateutil.parser.parse not always recognizes valid dates?
+            data.drop('None', inplace = True)
+            data.index = pd.to_datetime(data.index)
+        data.dropna(how='all', inplace=True)
+        p = self._get_parameter(data.iloc[0])
+        data.drop('waarnemingssoort',axis=1,inplace=True)
+        data.drop('eenheid',axis=1,inplace=True)
+        data.columns = [p['name']]
+        return data
 
 class RWSHistory(Generator):
     
@@ -95,6 +143,82 @@ class RWSHistory(Generator):
             unit = data['Eenheid']
             descr = data['Parameter'][16:]
             params[name] = {'description' : descr, 'unit': unit}
+        return params
+
+#LMW_URL = r'http://www.rijkswaterstaat.nl/apps/geoservices/rwsnl/awd.php?mode=data&loc=LITB&net=LMW&projecttype=watertemperatuur&category=1'
+LMW_URL = r'http://www.rijkswaterstaat.nl/apps/geoservices/rwsnl/awd.php?mode=data&loc={loc}&net=LMW&projecttype={parameter}&category=1'
+
+class LMW(Generator):
+    # json bestand met 10 minuten metingen van Landelijk Meetnet Water
+
+    jsonobj = None
+
+    def download(self, **kwargs):
+        url = kwargs.get('url', LMW_URL)
+        parameter = kwargs.get('parameter','watertemperatuur') 
+        locatie = kwargs.get('locatie', 'LITB')
+        if not 'filename' in kwargs:
+            kwargs['filename'] = 'lmw_{}_{}.json'.format(locatie, parameter)
+        kwargs['url'] = url.format(loc=locatie, parameter=parameter)
+        return super(LMW, self).download(**kwargs)
+
+    def get_data1(self, fil, **kwargs):
+        try:
+            # assume 1 series per file
+            # can be H10 (Water levels) and H10V (forecaste waterlevels)
+            fil.seek(0)
+            obj=json.load(fil)
+            tz = pytz.timezone('CET')
+            series = None
+            series_name = obj.keys()[0]
+            for k,v in obj.items():
+                index = [datetime.datetime.fromtimestamp(int(x['tijd']),tz) for x in v]
+                def conv(x):
+                    try:
+                        return float(x)
+                    except:
+                        return None
+                values = [conv(x['waarde']) for x in v]
+                s = pd.Series(index=index,data=values)
+                if series is None:
+                    series = s
+                else:
+                    series = series.append(s)
+        except Exception as e:
+            raise e
+#            logger.exception('Error parsing json response')
+        return pd.DataFrame({series_name: series})
+
+    def get_data(self, fil, **kwargs):
+        try:
+            fil.seek(0)
+            obj=json.load(fil)
+            tz = pytz.timezone('CET')
+            dfs = []
+            for k,v in obj.items():
+                index = [datetime.datetime.fromtimestamp(int(x['tijd']),tz) for x in v]
+                def conv(x):
+                    try:
+                        return float(x)
+                    except:
+                        return None
+                values = [conv(x['waarde']) for x in v]
+                s = pd.Series(index=index,data=values)
+                dfs.append(pd.DataFrame({k:s}))
+        except Exception as e:
+            raise e
+#            logger.exception('Error parsing json response')
+        return pd.concat(dfs).sort()
+        
+    def get_parameters(self, fil):
+        try:
+            fil.seek(0)
+            obj=json.load(fil)
+            params = {}
+            for k,v in obj.items():
+                params[k] = {'description' : v[0]['parameternaam'], 'unit': ''}
+        except:
+            logger.exception('Error parsing json response')
         return params
 
 class LMW10(Generator):
@@ -179,13 +303,25 @@ class LMW10(Generator):
     
 if __name__ == '__main__':
     
-    gen = RWSHistory()
-    with open(r'/media/sf_F_DRIVE/acaciadata.com/nederrijnlekenwaal/habe.txt') as f:
-        print gen.get_parameters(f)
-        print gen.get_data(f)
+#     gen = RWSHistory()
+#     with open(r'/media/sf_F_DRIVE/acaciadata.com/nederrijnlekenwaal/habe.txt') as f:
+#         print gen.get_parameters(f)
+#         print gen.get_data(f)
         
 #    gen = LMW10()
 #    datafile = r'/media/sf_F_DRIVE/acaciadata.com/meetdata.zip'
 #   print gen.get_parameters(datafile)
 #    print gen.get_data(datafile)
             
+    gen = LMW()
+    datafile = r'/media/sf_F_DRIVE/acaciadata.com/H10.txt'
+    with open(datafile) as f:
+        print gen.get_parameters(f)
+        print gen.get_data(f)
+            
+#     gen = Waterbase()
+#     datafile = r'/media/sf_F_DRIVE/acaciadata.com/id1-CULBBG-201301010000-201512312359.txt'
+#     with open(datafile) as f:
+#         print gen.get_parameters(f)
+#         print gen.get_data(f)
+   

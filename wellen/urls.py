@@ -3,7 +3,8 @@ from django.conf.urls.static import static
 from django.conf import settings
 
 from django.contrib import admin
-from .views import HomeView, DashGroupView
+from .views import HomeView
+from acacia.data.views import DashGroupView
 
 admin.autodiscover()
 
@@ -12,7 +13,7 @@ urlpatterns = patterns('wellen.views',
     url(r'^grappelli/', include('grappelli.urls')),
     url(r'^admin/', include(admin.site.urls)),
     url(r'^data/', include('acacia.data.urls',namespace='acacia')),
-    url(r'^(?P<name>[\w\s]+)$', DashGroupView.as_view(), name='wellen-dashboard'),
+    url(r'^(?P<name>[\w\s]+)$', DashGroupView.as_view(), name='dashboard-view'),
 )
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

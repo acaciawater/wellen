@@ -15,20 +15,20 @@ class HomeView(ProjectDetailView):
     def get_object(self):
         return get_object_or_404(Project,pk=1)
     
-class DashGroupView(TemplateView):
-    template_name = 'dashgroup.html'
-    
-    def get_context_data(self, **kwargs):
-        context = super(DashGroupView,self).get_context_data(**kwargs)
-        name = context.get('name')
-        page = int(self.request.GET.get('page', 1))
-        group = get_object_or_404(TabGroup, name__iexact=name)
-        dashboards =[p.dashboard for p in group.tabpage_set.order_by('order')]
-        context['group'] = group
-        page = min(page, len(dashboards))
-        if page > 0:
-            pages = list(group.pages())
-            context['title'] = 'Dashboard %s - %s' % (group.name, pages[page-1].name)
-            context['page'] = int(page)
-            context['dashboard'] = dashboards[page-1]
-        return context    
+# class DashGroupView(TemplateView):
+#     template_name = 'dashgroup.html'
+#     
+#     def get_context_data(self, **kwargs):
+#         context = super(DashGroupView,self).get_context_data(**kwargs)
+#         name = context.get('name')
+#         page = int(self.request.GET.get('page', 1))
+#         group = get_object_or_404(TabGroup, name__iexact=name)
+#         dashboards =[p.dashboard for p in group.tabpage_set.order_by('order')]
+#         context['group'] = group
+#         page = min(page, len(dashboards))
+#         if page > 0:
+#             pages = list(group.pages())
+#             context['title'] = 'Dashboard %s - %s' % (group.name, pages[page-1].name)
+#             context['page'] = int(page)
+#             context['dashboard'] = dashboards[page-1]
+#         return context    
