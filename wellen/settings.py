@@ -24,6 +24,8 @@ DEBUG = True
 
 TEMPLATE_DEBUG = True
 
+SITE_ID = 1
+
 ALLOWED_HOSTS = ['.acaciadata.com', 'localhost']
 
 # Application definition
@@ -38,13 +40,13 @@ INSTALLED_APPS = (
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.gis',
-#    'django_extensions', # for ERD
+    'django.contrib.sites',
     'bootstrap3',
-#    'south',
     'registration',
     'acacia',
     'acacia.data',
     'acacia.data.knmi',
+    'acacia.mqtt',
     'wellen',
 )
 
