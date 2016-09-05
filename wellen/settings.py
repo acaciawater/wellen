@@ -19,6 +19,7 @@ os.sys.path.append('/home/theo/texelmeet/acaciadata')
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 's@od5ww0)1)h)(wvue!ht^$0)z(7=$75rv^1slu3g1rxz2$9br'
 GOOGLE_MAPS_API_KEY = 'AIzaSyBZoEnkbR2kagMCHyT-CiuBzJOW3bkexBA'
+OPENWEATHER_APIKEY = 'cbfee8a09865749b6a3a6781c1acfcca'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
